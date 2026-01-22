@@ -3,8 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AppCarro — Cálculo de Puntos por Colimación</title>
+  <title>AppCarro — Proyectos, KMZ y Cálculo por Colimación</title>
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- Librerías para KMZ (ZIP) + reproyección UTM->WGS84 -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/proj4@2.11.0/dist/proj4.js"></script>
 </head>
 <body>
   <header class="app-header">
@@ -14,14 +18,41 @@
       </div>
       <div>
         <h1>AppCarro</h1>
-        <p class="subtitle">Geomática • Calibración por colimación • Cálculo y exportación</p>
+        <p class="subtitle">Geomática • Proyectos • Calibración por colimación • KMZ • Export GIS</p>
       </div>
     </div>
 
     <div class="header-actions">
+      <!-- Proyectos -->
+      <div class="proj-bar">
+        <label class="sr-only" for="selProject">Proyecto</label>
+        <select id="selProject" class="select select-compact" title="Proyecto activo"></select>
+
+        <button id="btnNewProject" class="btn btn-secondary" title="Crear nuevo proyecto">
+          <span class="btn-ico">＋</span> Nuevo
+        </button>
+
+        <button id="btnSaveProject" class="btn btn-secondary" title="Guardar cambios del proyecto activo">
+          <span class="btn-ico">💾</span> Guardar
+        </button>
+
+        <button id="btnExportProject" class="btn btn-ghost" title="Exportar proyecto (.json)">
+          <span class="btn-ico">⬇</span> Proyecto
+        </button>
+
+        <input id="fileImportProject" type="file" accept=".json" style="display:none;" />
+        <button id="btnImportProject" class="btn btn-ghost" title="Importar proyecto (.json)">
+          <span class="btn-ico">⬆</span> Importar
+        </button>
+      </div>
+
+      <div class="header-sep"></div>
+
+      <!-- Calibración / Config -->
       <button id="btnCalibrate" class="btn btn-secondary">
         <span class="btn-ico">⟳</span> Recalibrar
       </button>
+
       <button id="btnOpenConfig" class="btn btn-ghost">
         <span class="btn-ico">⚙</span> Config
       </button>
@@ -69,6 +100,19 @@
             </thead>
             <tbody></tbody>
           </table>
+        </div>
+      </div>
+
+      <div class="mini">
+        <div class="mini-title">Export GIS</div>
+        <div class="hint">GeoJSON se importa directo en QGIS/ArcGIS (coordenadas UTM EPSG:32719 por defecto).</div>
+        <div class="row">
+          <button id="btnExportGeoJSON" class="btn btn-secondary">
+            <span class="btn-ico">🗺️</span> Exportar GeoJSON
+          </button>
+          <button id="btnExportCSV" class="btn btn-ghost" title="Exporta CSV separado por el separador seleccionado">
+            <span class="btn-ico">📄</span> Exportar CSV
+          </button>
         </div>
       </div>
     </section>
@@ -154,6 +198,54 @@
         <img class="file-ico" src="assets/txt.png" alt="txt" />
         <span>Exporta un TXT con cabecera + puntos calculados. Ideal para reporte o carga GIS.</span>
       </div>
+
+      <!-- MAPA -->
+      <div class="mini" style="margin-top:14px;">
+        <div class="card-title" style="margin-bottom:10px;">
+          <h2>Mapa (KMZ / Imagen / Extents)</h2>
+          <div class="card-actions">
+            <input id="fileKmz" type="file" accept=".kmz" style="display:none;" />
+            <button id="btnLoadKmz" class="btn btn-secondary" title="Cargar KMZ con GroundOverlay">
+              <span class="btn-ico">🗺️</span> Cargar KMZ
+            </button>
+
+            <input id="fileImg" type="file" accept="image/*" style="display:none;" />
+            <button id="btnLoadImg" class="btn btn-ghost" title="Cargar imagen de fondo (PNG/JPG)">
+              <span class="btn-ico">🖼️</span> Imagen
+            </button>
+
+            <input id="fileWld" type="file" accept=".tfw,.jgw,.pgw,.wld,.txt" style="display:none;" />
+            <button id="btnLoadWld" class="btn btn-ghost" title="Cargar World File para calzar imagen">
+              <span class="btn-ico">📐</span> World file
+            </button>
+
+            <label class="sr-only" for="selCrs">CRS</label>
+            <select id="selCrs" class="select select-compact" title="Sistema de coordenadas de los puntos">
+              <option value="EPSG:32719" selected>EPSG:32719 (UTM 19S)</option>
+              <option value="EPSG:32718">EPSG:32718 (UTM 18S)</option>
+              <option value="EPSG:4326">EPSG:4326 (Lat/Lon)</option>
+            </select>
+
+            <button id="btnFitMap" class="btn btn-ghost" title="Ajustar vista a puntos">
+              <span class="btn-ico">⤢</span> Fit
+            </button>
+          </div>
+        </div>
+
+        <div class="hint">
+          KMZ se interpreta como <b>GroundOverlay</b> en WGS84. Tus puntos están en <b>UTM 19S (EPSG:32719)</b>.
+          Sin mapa cargado, la vista usa extents de los puntos.
+        </div>
+
+        <div class="table-wrap" style="max-height:none;">
+          <canvas id="mapCanvas" width="1400" height="520" style="width:100%; height:auto; display:block;"></canvas>
+        </div>
+
+        <div class="footer-note" style="margin-top:10px;">
+          <img class="file-ico" src="assets/xml.png" alt="kmz" />
+          <span>Tip: exporta el overlay como KMZ (una imagen + KML con LatLonBox). Para imagen georreferenciada, usa World File (TFW/PGW/JGW).</span>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -165,13 +257,48 @@
         <h3>Config fija (cámara + colimación)</h3>
         <button class="btn btn-ghost" id="btnCloseConfig">✕</button>
       </div>
-      <p class="hint">Edita el JSON y guarda. Se recalibrará automáticamente.</p>
+      <p class="hint">Edita el JSON y guarda. Se recalibrará automáticamente (se guarda en el proyecto activo).</p>
 
       <textarea id="configEditor" spellcheck="false"></textarea>
 
       <div class="modal-actions">
         <button id="btnSaveConfig" class="btn btn-primary">Guardar Config</button>
         <button id="btnReloadConfig" class="btn btn-secondary">Recargar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Proyecto -->
+  <div class="modal" id="modalProject" aria-hidden="true">
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-card" style="max-width:720px;">
+      <div class="modal-head">
+        <h3>Proyecto</h3>
+        <button class="btn btn-ghost" id="btnCloseProject">✕</button>
+      </div>
+
+      <div style="padding:14px;">
+        <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+          <div class="field">
+            <label>Nombre del proyecto</label>
+            <input id="inProjectName" type="text" placeholder="Ej: Laguna MEL — 2026-01-22" />
+            <small>Se guarda localmente en tu navegador (y puedes exportarlo a JSON).</small>
+          </div>
+
+          <div class="field">
+            <label>Acciones</label>
+            <div class="row" style="gap:10px; margin-top:2px;">
+              <button id="btnDuplicateProject" class="btn btn-secondary">Duplicar</button>
+              <button id="btnDeleteProject" class="btn btn-ghost" title="Elimina el proyecto activo">Eliminar</button>
+            </div>
+            <small>Tip: Duplica para campañas futuras manteniendo colimación/cámara.</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btnSaveProjectName" class="btn btn-primary">Guardar</button>
+        <button id="btnCancelProject" class="btn btn-secondary">Cerrar</button>
       </div>
     </div>
   </div>
