@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AppCarro — Cálculo de Puntos por Colimación</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <div class="logo">
+        <span class="logo-dot"></span>
+      </div>
+      <div>
+        <h1>AppCarro</h1>
+        <p class="subtitle">Geomática • Calibración por colimación • Cálculo y exportación</p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button id="btnCalibrate" class="btn btn-secondary">
+        <span class="btn-ico">⟳</span> Recalibrar
+      </button>
+      <button id="btnOpenConfig" class="btn btn-ghost">
+        <span class="btn-ico">⚙</span> Config
+      </button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- Panel izquierdo -->
+    <section class="card">
+      <div class="card-title">
+        <h2>Estado de calibración</h2>
+        <span class="badge" id="badgeStatus">Cargando…</span>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="kpi-label">Ajuste horizontal (ΔAH)</div>
+          <div class="kpi-value" id="kpiAh">—</div>
+          <div class="kpi-help">Offset de azimut aplicado a observados.</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Ajuste vertical (ΔAV)</div>
+          <div class="kpi-value" id="kpiAv">—</div>
+          <div class="kpi-help">Offset de inclinación aplicado a observados.</div>
+        </div>
+      </div>
+
+      <div class="mini">
+        <div class="mini-title">Cámara (fija desde config)</div>
+        <div class="mini-grid" id="cameraBox"></div>
+      </div>
+
+      <div class="mini">
+        <div class="mini-title">Diagnóstico colimación</div>
+        <div class="hint">Revisa residuales por punto (ΔAH/ΔAV) para detectar outliers.</div>
+        <div class="table-wrap">
+          <table class="table" id="diagTable">
+            <thead>
+              <tr>
+                <th>Punto</th>
+                <th>ΔAH (°)</th>
+                <th>ΔAV (°)</th>
+                <th>Res Dist (m)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Panel derecho -->
+    <section class="card">
+      <div class="card-title">
+        <h2>Cálculo de nuevos puntos</h2>
+        <div class="card-actions">
+          <button id="btnAddPoint" class="btn btn-primary">
+            <span class="btn-ico">＋</span> Calcular y agregar
+          </button>
+          <button id="btnExport" class="btn btn-secondary">
+            <span class="btn-ico">⬇</span> Exportar TXT
+          </button>
+          <button id="btnClear" class="btn btn-ghost">
+            <span class="btn-ico">🧹</span> Limpiar
+          </button>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label>Ángulo Horizontal observado (°)</label>
+          <input id="inAh" type="text" placeholder="Ej: 311.87" />
+          <small>Convención: 0°=Norte, 90°=Este</small>
+        </div>
+
+        <div class="field">
+          <label>Ángulo Vertical observado (°)</label>
+          <input id="inAv" type="text" placeholder="Ej: -1.80" />
+          <small>Inclinación respecto a la horizontal</small>
+        </div>
+
+        <div class="field">
+          <label>Distancia observada (m)</label>
+          <input id="inD" type="text" placeholder="Ej: 6725" />
+          <small>Distancia inclinada</small>
+        </div>
+
+        <div class="field">
+          <label>Separador exportación</label>
+          <select id="selSep">
+            <option value=";">Punto y coma (;) — Excel</option>
+            <option value=",">Coma (,)</option>
+            <option value="\t">Tab (TSV)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Decimal exportación</label>
+          <select id="selDec">
+            <option value=".">Punto (.)</option>
+            <option value=",">Coma (,)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Nombre de archivo</label>
+          <input id="inFile" type="text" placeholder="puntos_calculados.txt" />
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table" id="pointsTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>X (Este)</th>
+              <th>Y (Norte)</th>
+              <th>Z</th>
+              <th>AHc</th>
+              <th>AVc</th>
+              <th>D</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="footer-note">
+        <img class="file-ico" src="assets/txt.png" alt="txt" />
+        <span>Exporta un TXT con cabecera + puntos calculados. Ideal para reporte o carga GIS.</span>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal Config -->
+  <div class="modal" id="modalConfig" aria-hidden="true">
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Config fija (cámara + colimación)</h3>
+        <button class="btn btn-ghost" id="btnCloseConfig">✕</button>
+      </div>
+      <p class="hint">Edita el JSON y guarda. Se recalibrará automáticamente.</p>
+
+      <textarea id="configEditor" spellcheck="false"></textarea>
+
+      <div class="modal-actions">
+        <button id="btnSaveConfig" class="btn btn-primary">Guardar Config</button>
+        <button id="btnReloadConfig" class="btn btn-secondary">Recargar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
